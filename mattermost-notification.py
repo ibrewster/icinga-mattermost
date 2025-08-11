@@ -22,15 +22,20 @@ def connect_to_mattermost() -> tuple[mattermostdriver.Driver, str]:
     return (mattermost, channel_id)
 
 
-def post_alert(message):
+def post_alert(payload):
     mattermost, channel = connect_to_mattermost()
-    payload = {
+
+    # If the payload is for an attachment, it needs to be inside 'props'
+    final_payload = {
         'channel_id': channel,
-        'message': message,
+        'props': payload
     }
 
-    mattermost.posts.create_post(payload)
+    # If we need a message field (for @channel), it should be at the top level
+    if 'message' in payload:
+        final_payload['message'] = payload.pop('message')
 
+    mattermost.posts.create_post(final_payload)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Format Icinga service notification for Mattermost")
@@ -40,7 +45,6 @@ def parse_args():
     parser.add_argument("-l", "--hostname", required=True, help="Host name")
     parser.add_argument("-n", "--hostdisplayname", required=True, help="Host display name")
     parser.add_argument("-o", "--output", required=True, help="Service output")
-    parser.add_argument("-r", "--useremail", required=True, help="User email")
     parser.add_argument("-s", "--state", required=True, help="Service state")
     parser.add_argument("-t", "--notificationtype", required=True, help="Notification type")
 
@@ -58,7 +62,18 @@ def parse_args():
 
     return parser.parse_args()
 
+COLORS = {
+    "OK": "#00FF00",       # Green for OK
+    "WARNING": "#FFFF00",  # Yellow for WARNING
+    "CRITICAL": "#FF0000", # Red for CRITICAL
+    "UNKNOWN": "#808080",  # Gray for UNKNOWN
+    "UP": "#00FF00",       # Green for UP
+    "DOWN": "#FF0000",     # Red for DOWN
+}
+
+
 def format_message(args):
+    alert_color = COLORS.get(args.state.upper(), "#808080")  # Default to gray
     if args.servicename:
         # Service notification
         lines = [
@@ -80,12 +95,24 @@ def format_message(args):
         lines.append(f"**Comment**: _{args.comment}_")
     if args.author:
         lines.append(f"**Author**: {args.author}")
-
     if args.icingaurl:
         lines.append(f"[View in Icinga]({args.icingaurl})")
 
-    return "\n".join(lines)
+    lines.append("***")
+    payload = {
+        'message': '',
+        'attachments': [
+            {
+                'color': alert_color,
+                'text': "\n".join(lines)
+            }
+        ]
+    }
 
+    if args.state.upper() not in ["OK", "UP"]:
+        payload['message'] = "@channel"
+
+    return payload
 if __name__ == "__main__":
     args = parse_args()
     message = format_message(args)
