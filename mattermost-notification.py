@@ -76,6 +76,7 @@ def format_message(args):
     alert_color = COLORS.get(args.state.upper(), "#808080")  # Default to gray
     if args.servicename:
         # Service notification
+        summary = f"{args.notificationtype}: {args.servicedisplayname} on {args.hostdisplayname} is {args.state} - {args.output}"
         lines = [
             f"**{args.notificationtype}**: `{args.state}`",
             f"**Service**: {args.servicedisplayname} on `{args.hostdisplayname}`",
@@ -84,6 +85,7 @@ def format_message(args):
         ]
     else:
         # Host notification
+        summary = f"{args.notificationtype}: Host {args.hostdisplayname} is {args.state} - {args.output}"
         lines = [
             f"**{args.notificationtype}**: `{args.state}`",
             f"**Host**: {args.hostdisplayname}",
@@ -100,7 +102,7 @@ def format_message(args):
 
     lines.append("***")
     payload = {
-        'message': '',
+        'message': summary,
         'attachments': [
             {
                 'color': alert_color,
@@ -110,7 +112,7 @@ def format_message(args):
     }
 
     if args.state.upper() not in ["OK", "UP"]:
-        payload['message'] = "@channel"
+        payload['message'] = summary + " @channel"
 
     return payload
 if __name__ == "__main__":
